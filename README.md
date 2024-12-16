@@ -131,7 +131,7 @@ env, _ = make_humenv(
     wrappers=[
         FlattenObservation,
         lambda env: TransformObservation(
-            env, lambda obs: torch.tensor(obs.reshape(1, -1), dtype=torch.float32, device=device)
+            env, lambda obs: torch.tensor(obs.reshape(1, -1), dtype=torch.float32, device=device), env.observation_space # For gymnasium <1.0.0 remove the last argument: env.observation_space
         ),
     ],
     state_init="Default",
