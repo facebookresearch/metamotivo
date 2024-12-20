@@ -15,7 +15,7 @@ from humenv.rewards import RewardFunction
 
 
 def get_next(field: str, data: Any):
-    if ("next", field) in data:
+    if "next" in data and field in data["next"]:
         return data["next"][field]
     elif f"next_{field}" in data:
         return data[f"next_{field}"]
@@ -77,6 +77,10 @@ class RewardWrapper(BaseHumEnvBenchWrapper):
         qpos = get_next("qpos", data)
         qvel = get_next("qvel", data)
         action = data["action"]
+        if isinstance(qpos, torch.Tensor):
+            qpos = qpos.cpu().detach().numpy()
+            qvel = qvel.cpu().detach().numpy()
+            action = action.cpu().detach().numpy()
         rewards = relabel(
             env,
             qpos,
@@ -154,19 +158,22 @@ def relabel(
 ):
     chunk_size = int(np.ceil(qpos.shape[0] / max_workers))
     args = [(qpos[i : i + chunk_size], qvel[i : i + chunk_size], action[i : i + chunk_size]) for i in range(0, qpos.shape[0], chunk_size)]
-    if process_executor:
-        import multiprocessing
-
-        with ProcessPoolExecutor(
-            max_workers=max_workers,
-            mp_context=multiprocessing.get_context(process_context),
-        ) as exe:
-            f = functools.partial(_relabel_worker, model=env.unwrapped.model, reward_fn=reward_fn)
-            result = exe.map(f, args)
+    if max_workers == 1:
+        result = [_relabel_worker(args[0], model=env.unwrapped.model, reward_fn=reward_fn)]
     else:
-        with ThreadPoolExecutor(max_workers=max_workers) as exe:
-            f = functools.partial(_relabel_worker, model=env.unwrapped.model, reward_fn=reward_fn)
-            result = exe.map(f, args)
+        if process_executor:
+            import multiprocessing
+
+            with ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=multiprocessing.get_context(process_context),
+            ) as exe:
+                f = functools.partial(_relabel_worker, model=env.unwrapped.model, reward_fn=reward_fn)
+                result = exe.map(f, args)
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as exe:
+                f = functools.partial(_relabel_worker, model=env.unwrapped.model, reward_fn=reward_fn)
+                result = exe.map(f, args)
 
     tmp = [r for r in result]
     return np.concatenate(tmp)

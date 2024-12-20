@@ -90,17 +90,23 @@ class DictBuffer:
     @torch.no_grad
     def sample(self, batch_size) -> Dict[str, torch.Tensor]:
         self.ind = torch.randint(0, len(self), (batch_size,))
+        return extract_values(self.storage, self.ind)
 
-        def extract_values(d):
-            result = {}
-            for k, v in d.items():
-                if isinstance(v, dict):
-                    result[k] = extract_values(v)
-                else:
-                    result[k] = v[self.ind] + 0  # fast copy
-            return result
+    def get_full_buffer(self):
+        if self._is_full:
+            return self.storage
+        else:
+            return extract_values(self.storage, torch.arange(0, len(self)))
 
-        return extract_values(self.storage)
+
+def extract_values(d, idxs):
+    result = {}
+    for k, v in d.items():
+        if isinstance(v, Mapping):
+            result[k] = extract_values(v, idxs)
+        else:
+            result[k] = v[idxs]
+    return result
 
 
 @dataclasses.dataclass
@@ -115,6 +121,7 @@ class TrajectoryBuffer:
         self._is_full = False
         self.storage = None
         self._idx = 0
+        self.priorities = None
 
     def __len__(self) -> int:
         return self.capacity if self._is_full else self._idx
@@ -132,6 +139,7 @@ class TrajectoryBuffer:
                 self.storage.append(element)
             self._idx = 0
             self._is_full = False
+            self.priorities = torch.ones(self.capacity, device=self.device, dtype=torch.float32) / self.capacity
 
         def add(new_data):
             storage = {}
@@ -164,7 +172,8 @@ class TrajectoryBuffer:
             )
         num_slices = batch_size // self.seq_length
 
-        self.ep_ind = torch.randint(0, len(self), (num_slices,))
+        # self.ep_ind = torch.randint(0, len(self), (num_slices,))
+        self.ep_ind = torch.multinomial(self.priorities, num_slices, replacement=True)
         output = defaultdict(list)
         offset = 0
         if len(self.output_key_tp1) > 0:
@@ -180,6 +189,10 @@ class TrajectoryBuffer:
                 output["next"][k].append(_ep[k][time_idx + offset : time_idx + offset + self.seq_length])
 
         return dict_cat(output)
+
+    def update_priorities(self, priorities, idxs):
+        self.priorities[idxs] = priorities
+        self.priorities = self.priorities / torch.sum(self.priorities)
 
 
 def initialize_storage(data, storage, capacity, device) -> None:

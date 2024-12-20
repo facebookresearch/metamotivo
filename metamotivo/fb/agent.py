@@ -12,6 +12,9 @@ from .model import FBModel, config_from_dict
 from .model import Config as FBModelConfig
 from ..nn_models import weight_init, _soft_update_params, eval_mode
 from ..misc.zbuffer import ZBuffer
+from pathlib import Path
+import json
+import safetensors
 
 
 @dataclasses.dataclass
@@ -142,7 +145,7 @@ class FBAgent:
             obs, next_obs = self._model._obs_normalizer(obs), self._model._obs_normalizer(next_obs)
 
         torch.compiler.cudagraph_mark_step_begin()
-        z = self.sample_mixed_z(train_goal=next_obs) + 0 # fast copy
+        z = self.sample_mixed_z(train_goal=next_obs).clone()
         self.z_buffer.add(z)
 
         q_loss_coef = self.cfg.train.q_loss_coef if self.cfg.train.q_loss_coef > 0 else None
@@ -210,7 +213,7 @@ class FBAgent:
         orth_loss = orth_loss_offdiag + orth_loss_diag
         fb_loss += self.cfg.train.ortho_coef * orth_loss
 
-        q_loss = torch.tensor([0.0], device=z.device)
+        q_loss = torch.zeros(1, device=z.device, dtype=z.dtype)
         if q_loss_coef is not None:
             with torch.no_grad():
                 next_Qs = (target_Fs * z).sum(dim=-1)  # num_parallel x batch
@@ -307,3 +310,38 @@ class FBAgent:
         else:
             z = self._model.sample_z(step_count.shape[0], device=self.cfg.model.device)
         return z
+
+    @classmethod
+    def load(cls, path: str, device: str | None = None):
+        path = Path(path)
+        with (path / "config.json").open() as f:
+            loaded_config = json.load(f)
+        if device is not None:
+            loaded_config["model"]["device"] = device
+        agent = cls(**loaded_config)
+        optimizers = torch.load(str(path / "optimizers.pth"), weights_only=True)
+        agent.actor_optimizer.load_state_dict(optimizers["actor_optimizer"])
+        agent.backward_optimizer.load_state_dict(optimizers["backward_optimizer"])
+        agent.forward_optimizer.load_state_dict(optimizers["forward_optimizer"])
+
+        safetensors.torch.load_model(agent._model, path / "model/model.safetensors", device=device)
+        return agent
+
+    def save(self, output_folder: str) -> None:
+        output_folder = Path(output_folder)
+        output_folder.mkdir(exist_ok=True)
+        with (output_folder / "config.json").open("w+") as f:
+            json.dump(dataclasses.asdict(self.cfg), f, indent=4)
+        # save optimizer
+        torch.save(
+            {
+                "actor_optimizer": self.actor_optimizer.state_dict(),
+                "backward_optimizer": self.backward_optimizer.state_dict(),
+                "forward_optimizer": self.forward_optimizer.state_dict(),
+            },
+            output_folder / "optimizers.pth",
+        )
+        # save model
+        model_folder = output_folder / "model"
+        model_folder.mkdir(exist_ok=True)
+        self._model.save(output_folder=str(model_folder))

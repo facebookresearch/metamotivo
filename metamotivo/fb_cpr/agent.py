@@ -156,7 +156,7 @@ class FBcprAgent(FBAgent):
             expert_obs=expert_obs, expert_z=expert_z, train_obs=train_obs, train_z=train_z, grad_penalty=grad_penalty
         )
 
-        z = self.sample_mixed_z(train_goal=train_next_obs, expert_encodings=expert_z) + 0 # fast copy
+        z = self.sample_mixed_z(train_goal=train_next_obs, expert_encodings=expert_z).clone()
         self.z_buffer.add(z)
 
         if self.cfg.train.relabel_ratio is not None:
