@@ -138,7 +138,7 @@ class TrainConfig:
     dataset_root: str
     seed: int = 0
     domain_name: str = "walker"
-    task_name: str = "walk"
+    task_name: str | None = None
     dataset_expl_agent: str = "rnd"
     num_train_steps: int = 3_000_000
     load_n_episodes: int = 5_000
@@ -323,16 +323,17 @@ if __name__ == "__main__":
     warnings.warn(
         "Since the original creation of ExORL, mujoco has seen many updates. To rerun all the actions and collect a physics consistent data, you may optionally use the update_data.py utility from MTM (https://github.com/facebookresearch/mtm/tree/main/research/exorl)."
     )
-    if config.domain_name == "walker":
-        config.task_name = "walk"
-    elif config.domain_name == "cheetah":
-        config.task_name = "run"
-    elif config.domain_name == "pointmass":
-        config.task_name = "reach_top_left"
-    elif config.domain_name == "quadruped":
-        config.task_name = "run"
-    else:
-        raise RuntimeError("Unsupported task")
+    if config.task_name is None:
+        if config.domain_name == "walker":
+            config.task_name = "walk"
+        elif config.domain_name == "cheetah":
+            config.task_name = "run"
+        elif config.domain_name == "pointmass":
+            config.task_name = "reach_top_left"
+        elif config.domain_name == "quadruped":
+            config.task_name = "run"
+        else:
+            raise RuntimeError("Unsupported domain, you need to specify task_name")
     agent_config = create_agent(
         domain_name=config.domain_name,
         task_name=config.task_name,
