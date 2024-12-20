@@ -5,7 +5,7 @@ description = "Inference and Training of FB-CPR"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "safetensors>=0.4.4",
+    "safetensors>=0.4.5",
     "torch>=2.3",
 ]
 
