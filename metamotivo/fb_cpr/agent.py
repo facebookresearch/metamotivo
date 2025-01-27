@@ -4,16 +4,17 @@
 # LICENSE file in the root directory of this source tree.
 
 import dataclasses
-import torch
-import torch.nn.functional as F
 from typing import Dict
 
-from ..fb.agent import TrainConfig as FBTrainConfig
-from ..fb.agent import FBAgent
-from .model import FBcprModel, config_from_dict
-from ..nn_models import eval_mode, _soft_update_params
-from .model import Config as FBcprModelConfig
+import torch
+import torch.nn.functional as F
 from torch import autograd
+
+from ..fb.agent import FBAgent
+from ..fb.agent import TrainConfig as FBTrainConfig
+from ..nn_models import _soft_update_params, eval_mode
+from .model import Config as FBcprModelConfig
+from .model import FBcprModel, config_from_dict
 
 
 @dataclasses.dataclass
@@ -84,10 +85,10 @@ class FBcprAgent(FBAgent):
             self.update_critic = torch.compile(self.update_critic, mode=mode)
             self.update_discriminator = torch.compile(self.update_discriminator, mode=mode)
             self.encode_expert = torch.compile(self.encode_expert, mode=mode, fullgraph=True)
-            # self.sample_mixed_z = torch.compile(self.sample_mixed_z, mode=mode, fullgraph=True)
 
         if self.cfg.cudagraphs:
             from tensordict.nn import CudaGraphModule
+
             self.update_critic = CudaGraphModule(self.update_critic, warmup=5)
             self.update_discriminator = CudaGraphModule(self.update_discriminator, warmup=5)
             self.encode_expert = CudaGraphModule(self.encode_expert, warmup=5)
@@ -97,7 +98,11 @@ class FBcprAgent(FBAgent):
         z = self._model.sample_z(self.cfg.train.batch_size, device=self.device)
         p_goal = self.cfg.train.train_goal_ratio
         p_expert_asm = self.cfg.train.expert_asm_ratio
-        prob = torch.tensor([p_goal, p_expert_asm, 1 - p_goal - p_expert_asm], dtype=torch.float32, device=self.device)
+        prob = torch.tensor(
+            [p_goal, p_expert_asm, 1 - p_goal - p_expert_asm],
+            dtype=torch.float32,
+            device=self.device,
+        )
         mix_idxs = torch.multinomial(prob, num_samples=self.cfg.train.batch_size, replacement=True).reshape(-1, 1)
 
         # zs obtained by encoding train goals
@@ -117,11 +122,13 @@ class FBcprAgent(FBAgent):
         # encode expert trajectories through B
         B_expert = self._model._backward_map(next_obs).detach()  # batch x d
         B_expert = B_expert.view(
-            self.cfg.train.batch_size // self.cfg.model.seq_length, self.cfg.model.seq_length, B_expert.shape[-1]
+            self.cfg.train.batch_size // self.cfg.model.seq_length,
+            self.cfg.model.seq_length,
+            B_expert.shape[-1],
         )  # N x L x d
         z_expert = B_expert.mean(dim=1)  # N x d
         z_expert = self._model.project_z(z_expert)
-        z_expert = z_expert.repeat_interleave(self.cfg.model.seq_length, dim=0)  # batch x d
+        z_expert = torch.repeat_interleave(z_expert, self.cfg.model.seq_length, dim=0)  # batch x d
         return z_expert
 
     def update(self, replay_buffer, step: int) -> Dict[str, torch.Tensor]:
@@ -143,17 +150,27 @@ class FBcprAgent(FBAgent):
         self._model._obs_normalizer(train_next_obs)
 
         with torch.no_grad(), eval_mode(self._model._obs_normalizer):
-            train_obs, train_next_obs = self._model._obs_normalizer(train_obs), self._model._obs_normalizer(train_next_obs)
-            expert_obs, expert_next_obs = self._model._obs_normalizer(expert_obs), self._model._obs_normalizer(expert_next_obs)
+            train_obs, train_next_obs = (
+                self._model._obs_normalizer(train_obs),
+                self._model._obs_normalizer(train_next_obs),
+            )
+            expert_obs, expert_next_obs = (
+                self._model._obs_normalizer(expert_obs),
+                self._model._obs_normalizer(expert_next_obs),
+            )
 
+        torch.compiler.cudagraph_mark_step_begin()
         expert_z = self.encode_expert(next_obs=expert_next_obs)
         train_z = train_batch["z"].to(self.device)
 
         # train the discriminator
         grad_penalty = self.cfg.train.grad_penalty_discriminator if self.cfg.train.grad_penalty_discriminator > 0 else None
-        # TODO does it make sense to move cudagraph_mark_step_begin here?
         metrics = self.update_discriminator(
-            expert_obs=expert_obs, expert_z=expert_z, train_obs=train_obs, train_z=train_z, grad_penalty=grad_penalty
+            expert_obs=expert_obs,
+            expert_z=expert_z,
+            train_obs=train_obs,
+            train_z=train_z,
+            grad_penalty=grad_penalty,
         )
 
         z = self.sample_mixed_z(train_goal=train_next_obs, expert_encodings=expert_z).clone()
@@ -166,7 +183,6 @@ class FBcprAgent(FBAgent):
         q_loss_coef = self.cfg.train.q_loss_coef if self.cfg.train.q_loss_coef > 0 else None
         clip_grad_norm = self.cfg.train.clip_grad_norm if self.cfg.train.clip_grad_norm > 0 else None
 
-        torch.compiler.cudagraph_mark_step_begin()
         metrics.update(
             self.update_fb(
                 obs=train_obs,
@@ -179,19 +195,50 @@ class FBcprAgent(FBAgent):
                 clip_grad_norm=clip_grad_norm,
             )
         )
-        metrics.update(self.update_critic(obs=train_obs, action=train_action, discount=discount, next_obs=train_next_obs, z=train_z))
-        metrics.update(self.update_actor(obs=train_obs, action=train_action, z=train_z, clip_grad_norm=clip_grad_norm))
+        metrics.update(
+            self.update_critic(
+                obs=train_obs,
+                action=train_action,
+                discount=discount,
+                next_obs=train_next_obs,
+                z=train_z,
+            )
+        )
+        metrics.update(
+            self.update_actor(
+                obs=train_obs,
+                action=train_action,
+                z=train_z,
+                clip_grad_norm=clip_grad_norm,
+            )
+        )
 
         with torch.no_grad():
-            _soft_update_params(self._forward_map_paramlist, self._target_forward_map_paramlist, self.cfg.train.fb_target_tau)
-            _soft_update_params(self._backward_map_paramlist, self._target_backward_map_paramlist, self.cfg.train.fb_target_tau)
-            _soft_update_params(self._critic_map_paramlist, self._target_critic_map_paramlist, self.cfg.train.critic_target_tau)
+            _soft_update_params(
+                self._forward_map_paramlist,
+                self._target_forward_map_paramlist,
+                self.cfg.train.fb_target_tau,
+            )
+            _soft_update_params(
+                self._backward_map_paramlist,
+                self._target_backward_map_paramlist,
+                self.cfg.train.fb_target_tau,
+            )
+            _soft_update_params(
+                self._critic_map_paramlist,
+                self._target_critic_map_paramlist,
+                self.cfg.train.critic_target_tau,
+            )
 
         return metrics
 
     @torch.compiler.disable
     def gradient_penalty_wgan(
-        self, real_obs: torch.Tensor, real_z: torch.Tensor, fake_obs: torch.Tensor, fake_z: torch.Tensor
+        self,
+        real_obs: torch.Tensor,
+        real_z: torch.Tensor,
+        fake_obs: torch.Tensor,
+        fake_z: torch.Tensor,
     ) -> torch.Tensor:
         batch_size = real_obs.shape[0]
         alpha = torch.rand(batch_size, 1, device=real_obs.device)
@@ -217,7 +264,12 @@ class FBcprAgent(FBAgent):
         return gradient_penalty
 
     def update_discriminator(
-        self, expert_obs: torch.Tensor, expert_z: torch.Tensor, train_obs: torch.Tensor, train_z: torch.Tensor, grad_penalty: float | None
+        self,
+        expert_obs: torch.Tensor,
+        expert_z: torch.Tensor,
+        train_obs: torch.Tensor,
+        train_z: torch.Tensor,
+        grad_penalty: float | None,
     ) -> Dict[str, torch.Tensor]:
         expert_logits = self._model._discriminator.compute_logits(obs=expert_obs, z=expert_z)
         unlabeled_logits = self._model._discriminator.compute_logits(obs=train_obs, z=train_z)
@@ -284,7 +336,11 @@ class FBcprAgent(FBAgent):
         return output_metrics
 
     def update_actor(
-        self, obs: torch.Tensor, action: torch.Tensor, z: torch.Tensor, clip_grad_norm: float | None
+        self,
+        obs: torch.Tensor,
+        action: torch.Tensor,
+        z: torch.Tensor,
+        clip_grad_norm: float | None,
     ) -> Dict[str, torch.Tensor]:
         dist = self._model._actor(obs, z, self._model.cfg.actor_std)
         action = dist.sample(clip=self.cfg.train.stddev_clip)

@@ -10,6 +10,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import copy
+from pathlib import Path
+from safetensors.torch import save_model as safetensors_save_model
+import json
 
 from ..nn_models import build_backward, build_forward, build_actor, eval_mode
 from .. import config_from_dict, load_model
@@ -92,6 +95,13 @@ class FBModel(nn.Module):
     @classmethod
     def load(cls, path: str, device: str | None = None):
         return load_model(path, device, cls=cls)
+
+    def save(self, output_folder: str) -> None:
+        output_folder = Path(output_folder)
+        output_folder.mkdir(exist_ok=True)
+        safetensors_save_model(self, output_folder / "model.safetensors")
+        with (output_folder / "config.json").open("w+") as f:
+            json.dump(dataclasses.asdict(self.cfg), f, indent=4)
 
     def _normalize(self, obs: torch.Tensor):
         with torch.no_grad(), eval_mode(self._obs_normalizer):

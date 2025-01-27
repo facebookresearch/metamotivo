@@ -3,6 +3,7 @@
 # This source code is licensed under the CC BY-NC 4.0 license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
 import torch
 from typing import Any
 import numpy as np
@@ -58,6 +59,23 @@ class BaseHumEnvBenchWrapper:
         # Delegate to the wrapped instance
         return getattr(self.model, name)
 
+    def __deepcopy__(self, memo):
+        return type(self)(model=copy.deepcopy(self.model, memo), numpy_output=self.numpy_output, _dtype=copy.deepcopy(self._dtype))
+
+    def __getstate__(self):
+        # Return a dictionary containing the state of the object
+        return {
+            "model": self.model,
+            "numpy_output": self.numpy_output,
+            "_dtype": self._dtype,
+        }
+
+    def __setstate__(self, state):
+        # Restore the state of the object from the given dictionary
+        self.model = state["model"]
+        self.numpy_output = state["numpy_output"]
+        self._dtype = state["_dtype"]
+
 
 @dataclasses.dataclass(kw_only=True)
 class RewardWrapper(BaseHumEnvBenchWrapper):
@@ -102,6 +120,46 @@ class RewardWrapper(BaseHumEnvBenchWrapper):
         inference_fn = getattr(self.model, self.inference_function, None)
         ctxs = inference_fn(**td).reshape(1, -1)
         return ctxs
+
+    def __deepcopy__(self, memo):
+        # Create a new instance of the same type as self
+        return type(self)(
+            model=copy.deepcopy(self.model, memo),
+            numpy_output=self.numpy_output,
+            _dtype=copy.deepcopy(self._dtype),
+            inference_dataset=copy.deepcopy(self.inference_dataset),
+            num_samples_per_inference=self.num_samples_per_inference,
+            inference_function=self.inference_function,
+            max_workers=self.max_workers,
+            process_executor=self.process_executor,
+            process_context=self.process_context,
+        )
+
+    def __getstate__(self):
+        # Return a dictionary containing the state of the object
+        return {
+            "model": self.model,
+            "numpy_output": self.numpy_output,
+            "_dtype": self._dtype,
+            "inference_dataset": self.inference_dataset,
+            "num_samples_per_inference": self.num_samples_per_inference,
+            "inference_function": self.inference_function,
+            "max_workers": self.max_workers,
+            "process_executor": self.process_executor,
+            "process_context": self.process_context,
+        }
+
+    def __setstate__(self, state):
+        # Restore the state of the object from the given dictionary
+        self.model = state["model"]
+        self.numpy_output = state["numpy_output"]
+        self._dtype = state["_dtype"]
+        self.inference_dataset = state["inference_dataset"]
+        self.num_samples_per_inference = state["num_samples_per_inference"]
+        self.inference_function = state["inference_function"]
+        self.max_workers = state["max_workers"]
+        self.process_executor = state["process_executor"]
+        self.process_context = state["process_context"]
 
 
 @dataclasses.dataclass(kw_only=True)

@@ -44,4 +44,4 @@ def config_from_dict(source: Dict, config_class: Any):
     return target
 
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

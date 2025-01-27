@@ -4,15 +4,16 @@
 # LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
-import torch
-import dataclasses
-from typing import Dict, Any, Union, List
-from collections.abc import Mapping
-from collections import defaultdict
-import numpy as np
-import numbers
-import functools
 
+import dataclasses
+import functools
+import numbers
+from collections import defaultdict
+from collections.abc import Mapping
+from typing import Any, Dict, List, Union
+
+import numpy as np
+import torch
 
 Device = Union[str, torch.device]
 
@@ -92,14 +93,14 @@ class DictBuffer:
         self.ind = torch.randint(0, len(self), (batch_size,))
         return extract_values(self.storage, self.ind)
 
-    def get_full_buffer(self):
+    def get_full_buffer(self) -> Dict:
         if self._is_full:
             return self.storage
         else:
             return extract_values(self.storage, torch.arange(0, len(self)))
 
 
-def extract_values(d, idxs):
+def extract_values(d: Dict, idxs: List | torch.Tensor | np.ndarray) -> Dict:
     result = {}
     for k, v in d.items():
         if isinstance(v, Mapping):
@@ -190,12 +191,12 @@ class TrajectoryBuffer:
 
         return dict_cat(output)
 
-    def update_priorities(self, priorities, idxs):
+    def update_priorities(self, priorities: torch.Tensor, idxs: torch.Tensor) -> None:
         self.priorities[idxs] = priorities
         self.priorities = self.priorities / torch.sum(self.priorities)
 
 
-def initialize_storage(data, storage, capacity, device) -> None:
+def initialize_storage(data: Dict, storage: Dict, capacity: int, device: Device) -> None:
     def recursive_initialize(d, s):
         for k, v in d.items():
             if isinstance(v, Mapping):
@@ -234,10 +235,10 @@ def dtype_numpytotorch(np_dtype: Any) -> torch.dtype:
         raise ValueError(f"Unknown type {np_dtype}")
 
 
-def dict_cat(d) -> Dict[str, torch.Tensor]:
+def dict_cat(d: Mapping) -> Dict[str, torch.Tensor]:
     res = {}
     for k, v in d.items():
-        if isinstance(v, dict):
+        if isinstance(v, Mapping):
             res[k] = dict_cat(v)
         else:
             res[k] = torch.cat(v, dim=0)

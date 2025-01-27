@@ -2,13 +2,13 @@
 
 We provide a few examples on how to use the Meta Motivo repository.
 
-## Offline training with ExoRL datasets
+## FB: Offline training with ExoRL datasets
 
 [ExoRL](https://github.com/denisyarats/exorl) has been widely used to train offline algorithms. We provide the code for training FB on standard domains such as `walker`, `cheetah`, `quadruped` and `pointmass`. We use the standard tasks in `dm_control`, but you can easily update the script to run the full set of tasks defined in `ExoRL` or in the paper [Fast Imitation via Behavior Foundation Models](https://openreview.net/forum?id=qnWtw3l0jb). We will provide more details below.
 
 To use the provided script you can simply run from terminal
 
-```python
+```bash
 python fb_train_dmc.py --domain_name walker --dataset_root <root to exorl data>
 ```
 
@@ -31,3 +31,32 @@ ALL_TASKS = {
 ```
 - use `dmc.make` for environment creation. For example, replace `suite.load(domain_name=self.cfg.domain_name,task_name=task,environment_kwargs={"flat_observation": True},)` with `dmc.make(f"{self.cfg.domain_name}_{task}")`.
 - This changes the way of getting the observation from `time_step.observation["observations"]` to simply `time_step.observation`. Update the file accordingly.
+
+
+## FB-CPR: Online training with HumEnv
+
+We provide a complete code for training FB-CPR as described in the paper [Zero-Shot Whole-Body Humanoid Control via Behavioral Foundation Models](https://ai.meta.com/research/publications/zero-shot-whole-body-humanoid-control-via-behavioral-foundation-models/). 
+
+**IMPORTANT!** We assume you have already preprocessed the AMASS motions as described [here](https://github.com/facebookresearch/humenv/tree/main/data_preparation). In addition, we assume you also downloaded the `test_train_split` sub-folder.
+
+The script is setup with the S configuration (i.e., paper configuration) and can be run by simply calling
+
+```bash
+python fbcpr_train_humenv.py --compile --motions test_train_split/large1_small1_train_0.1.txt --motions_root <root to AMASS motions> --prioritization
+```
+
+There are several parameters that can be changed to do evaluation more modular, checkpoint the models, etc. We refer to the code for more details.
+
+If you would like to train our largest model (the one deployed in the [demo](https://metamotivo.metademolab.com/)), replace the following line
+
+```
+model, hidden_dim, hidden_layers = "simple", 1024, 2
+```
+
+with
+
+```
+model, hidden_dim, hidden_layers = "residual", 2048, 12
+```
+
+NOTE: we recommend that you use compile=True on a A100 GPU or better, as otherwise training can be very slow.
