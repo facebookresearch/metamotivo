@@ -19,7 +19,7 @@ The project is pip installable in your environment.
 pip install "metamotivo[huggingface,humenv] @ git+https://github.com/facebookresearch/metamotivo.git"
 ```
 
-It requires Python 3.10+ and has only two dependencies: `torch >= 2`, `safetensors`. Optional dependencies include `humenv["bench"]` and `huggingface_hub` for testing/training and loading models from HuggingFace.
+It requires Python 3.10+. Optional dependencies include `humenv["bench"]` and `huggingface_hub` for testing/training and loading models from HuggingFace.
 
 
 # Pretrained models
@@ -40,7 +40,7 @@ For reproducibility, we provide all the **5** models (**metamotivo-S-X**) we tra
 
 Once the library is installed, you can easily create an FB-CPR agent and download a pre-trained model from the Hugging Face hub. Note that the model is an instance of `torch.nn.Module` and by default it is initialized in "inference" mode (no_grad and eval mode).
 
-We provide some simple code snippets to demonstrate how to use the model below. For more detailed examples, see our tutorials on [interacting with the model](https://github.com/facebookresearch/metamotivo/blob/main/tutorial.ipynb), [running an evaluation](https://github.com/facebookresearch/metamotivo/blob/main/tutorial_benchmark.ipynb), and [training from scratch](https://github.com/facebookresearch/metamotivo/blob/main/tutorial_train.ipynb).
+We provide some simple code snippets to demonstrate how to use the model below. For more detailed examples, see our tutorials on [interacting with the model](https://github.com/facebookresearch/metamotivo/blob/main/tutorial.ipynb), [running an evaluation](https://github.com/facebookresearch/metamotivo/blob/main/tutorial_benchmark.ipynb), and [training from scratch](https://github.com/facebookresearch/metamotivo/tree/andrea/update_readme/examples).
 
 ### Download the pre-trained models
 
@@ -181,7 +181,7 @@ reward_eval = humenv.bench.RewardEvaluation(
 scores = reward_eval.run(model)
 ```
 
-You can do the same for the other evaluations provided in `humenv.bench`. Please refer to `examples/humenv_evaluation.py` for a full evaluation loop.
+You can do the same for the other evaluations provided in `humenv.bench`. Please refer to `tutorial_benchmark.ipynb` for a full evaluation loop.
 
 # Citation
 ```
