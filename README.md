@@ -40,7 +40,7 @@ For reproducibility, we provide all the **5** models (**metamotivo-S-X**) we tra
 
 Once the library is installed, you can easily create an FB-CPR agent and download a pre-trained model from the Hugging Face hub. Note that the model is an instance of `torch.nn.Module` and by default it is initialized in "inference" mode (no_grad and eval mode).
 
-We provide some simple code snippets to demonstrate how to use the model below. For more detailed examples, see our tutorials on [interacting with the model](https://github.com/facebookresearch/metamotivo/blob/main/tutorial.ipynb), [running an evaluation](https://github.com/facebookresearch/metamotivo/blob/main/tutorial_benchmark.ipynb), and [training from scratch](https://github.com/facebookresearch/metamotivo/tree/andrea/update_readme/examples).
+We provide some simple code snippets to demonstrate how to use the model below. For more detailed examples, see our tutorials on [interacting with the model](https://github.com/facebookresearch/metamotivo/blob/main/tutorial.ipynb), [running an evaluation](https://github.com/facebookresearch/metamotivo/blob/main/tutorial_benchmark.ipynb), and [training from scratch](https://github.com/facebookresearch/metamotivo/tree/main/examples).
 
 ### Download the pre-trained models
 
