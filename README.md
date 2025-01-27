@@ -8,8 +8,8 @@ This repository provides a PyTorch implementation and pre-trained models for Met
 ### Features
 
 - We provide [**6** pretrained FB-CPR](https://huggingface.co/collections/facebook/meta-motivo-6757761e8fd4a032466fd129) models for controlling the humanoid model defined in [HumEnv](https://github.com/facebookresearch/HumEnv/).
-- **Fully reproducible** scripts for evaluating the model in HumEnv
-- **Training code for FB and FB-CPR algorithms**
+- **Fully reproducible** scripts for evaluating the model in HumEnv.
+- **Fully reproducible** [FB-CPR training code in HumEnv](examples/fbcpr_train_humenv.py) for the full results in the paper, and [FB training code in DMC](examples/fb_train_dmc.py) for faster experimentation.
 
 #  Installation
 
