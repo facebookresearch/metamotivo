@@ -55,7 +55,7 @@ def set_seed_everywhere(seed):
     random.seed(seed)
 
 
-def load_expert_trajectories(motions: str | Path, motions_root: str | Path, device: str) -> TrajectoryBuffer:
+def load_expert_trajectories(motions: str | Path, motions_root: str | Path, device: str, sequence_length: int) -> TrajectoryBuffer:
     with open(motions, "r") as txtf:
         h5files = [el.strip().replace(" ", "") for el in txtf.readlines()]
     episodes = []
@@ -68,7 +68,7 @@ def load_expert_trajectories(motions: str | Path, motions_root: str | Path, devi
         episodes.extend(_ep)
     buffer = TrajectoryBuffer(
         capacity=len(episodes),
-        seq_length=agent_config.model.seq_length,
+        seq_length=sequence_length,
         device=device,
     )
     buffer.extend(episodes)
@@ -184,7 +184,7 @@ class Workspace:
 
     def train_online(self) -> None:
         print("Loading expert trajectories")
-        expert_buffer = load_expert_trajectories(self.cfg.motions, self.cfg.motions_root, device=self.cfg.buffer_device)
+        expert_buffer = load_expert_trajectories(self.cfg.motions, self.cfg.motions_root, device=self.cfg.buffer_device, sequence_length=self.agent_cfg.model.seq_length)
 
         print("Creating the training environment")
         train_env, mp_info = make_humenv(
