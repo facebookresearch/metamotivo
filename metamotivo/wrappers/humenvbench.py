@@ -86,8 +86,8 @@ class RewardWrapper(BaseHumEnvBenchWrapper):
     process_executor: bool = False
     process_context: str = "spawn"
 
-    def reward_inference(self, task: str) -> torch.Tensor:
-        env, _ = make_humenv(task=task)
+    def reward_inference(self, task: str, **kwargs) -> torch.Tensor:
+        env, _ = make_humenv(task=task, **kwargs)
         if self.num_samples_per_inference < len(self.inference_dataset):
             data = self.inference_dataset.sample(self.num_samples_per_inference)
         else:

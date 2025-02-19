@@ -183,6 +183,65 @@ scores = reward_eval.run(model)
 
 You can do the same for the other evaluations provided in `humenv.bench`. Please refer to `tutorial_benchmark.ipynb` for a full evaluation loop.
 
+# Rendering a reward-based or tracking policy
+
+We show how to render an episode with a reward-based policy.
+
+```python
+from humenv import STANDARD_TASKS
+import mediapy as media
+
+task = STANDARD_TASKS[0]
+model = FBcprModel.from_pretrained("facebook/metamotivo-S-1", device="cpu")
+rew_model = RewardWrapper(
+        model=model,
+        inference_dataset=buffer, # see above how to download and create a buffer
+        num_samples_per_inference=100_000,
+        inference_function="reward_wr_inference",
+        max_workers=40,
+        process_executor=True,
+        process_context="forkserver"
+    )
+z = rew_model.reward_inference(task)
+env, _ = make_humenv(num_envs=1, task=task, state_init="DefaultAndFall", wrappers=[gymnasium.wrappers.FlattenObservation])
+done = False
+observation, info = env.reset()
+frames = [env.render()]
+while not done:
+    obs = torch.tensor(observation.reshape(1,-1), dtype=torch.float32, device=rew_model.device)
+    action = rew_model.act(obs=obs, z=z).ravel()
+    observation, reward, terminated, truncated, info = env.step(action)
+    frames.append(env.render())
+    done = bool(terminated or truncated)
+
+media.show_video(frames, fps=30)
+```
+
+It is also easy to render a policy for tracking a motion.
+
+```python
+from metamotivo.wrappers.humenvbench import TrackingWrapper 
+from pathlib import Path
+from humenv.misc.motionlib import MotionBuffer
+
+model = FBcprModel.from_pretrained("facebook/metamotivo-S-1", device="cpu")
+track_model = TrackingWrapper(model=model)
+motion_buffer = MotionBuffer(files=ADD_THE_DESIRED_MOTION, base_path=ADD_YOUR_MOTION_ROOT, keys=["qpos", "qvel", "observation"])
+ep_ = motion_buffer.get(motion_buffer.get_motion_ids()[0]
+ctx = track_model.tracking_inference(next_obs=ep_["observation"][1:])
+observation, info = env.reset(options={"qpos": ep_["qpos"][0], "qvel": ep_["qvel"][0]})
+done = False
+observation, info = env.reset()
+frames = [env.render()]
+for t in range(len(ctx)):
+    obs = torch.tensor(observation.reshape(1,-1), dtype=torch.float32, device=track_model.device)
+    action = track_model.act(obs=obs, z=ctx[t]).ravel()
+    observation, reward, terminated, truncated, info = env.step(action)
+    frames.append(env.render())
+
+media.show_video(frames, fps=30)
+```
+
 # Citation
 ```
 @article{tirinzoni2024metamotivo,
