@@ -188,6 +188,8 @@ You can do the same for the other evaluations provided in `humenv.bench`. Please
 We show how to render an episode with a reward-based policy.
 
 ```python
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
 from humenv import STANDARD_TASKS
 import mediapy as media
 
@@ -220,6 +222,8 @@ media.show_video(frames, fps=30)
 It is also easy to render a policy for tracking a motion.
 
 ```python
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
 from metamotivo.wrappers.humenvbench import TrackingWrapper 
 from pathlib import Path
 from humenv.misc.motionlib import MotionBuffer
