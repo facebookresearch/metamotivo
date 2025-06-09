@@ -133,11 +133,7 @@ class TrajectoryBuffer:
     @torch.no_grad
     def extend(self, data: List[dict]) -> None:
         if self.storage is None:
-            self.storage = []
-            for _ in range(self.capacity):
-                element = {}
-                initialize_storage(data[0], element, self.capacity, self.device)
-                self.storage.append(element)
+            self.storage = [None for _ in range(self.capacity)]
             self._idx = 0
             self._is_full = False
             self.priorities = torch.ones(self.capacity, device=self.device, dtype=torch.float32) / self.capacity
